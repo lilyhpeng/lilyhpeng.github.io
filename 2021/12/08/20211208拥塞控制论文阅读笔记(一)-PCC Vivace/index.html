@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="​        拥塞控制（Congestion Control，CC）算法是网络传输中一个非常重要的模块，它的主要目的是通过控制网络发包的速率，避免因短时间向网络中注入大量数据包，超过网络本身可传输的数据量导致网络传输队列拥塞，从而造成延时增大及丢包等问题。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="拥塞控制论文阅读笔记(一)-PCC Vivace">
+<meta property="og:url" content="http://example.com/2021/12/08/20211208%E6%8B%A5%E5%A1%9E%E6%8E%A7%E5%88%B6%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB%E7%AC%94%E8%AE%B0(%E4%B8%80)-PCC%20Vivace/index.html">
+<meta property="og:site_name" content="lily&#39;s page">
+<meta property="og:description" content="​        拥塞控制（Congestion Control，CC）算法是网络传输中一个非常重要的模块，它的主要目的是通过控制网络发包的速率，避免因短时间向网络中注入大量数据包，超过网络本身可传输的数据量导致网络传输队列拥塞，从而造成延时增大及丢包等问题。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-12-07T16:00:00.000Z">
+<meta property="article:modified_time" content="2021-12-07T09:17:36.457Z">
+<meta property="article:author" content="lilyhpeng">
+<meta property="article:tag" content="拥塞控制">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2021/12/08/20211208%E6%8B%A5%E5%A1%9E%E6%8E%A7%E5%88%B6%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB%E7%AC%94%E8%AE%B0(%E4%B8%80)-PCC%20Vivace/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>拥塞控制论文阅读笔记(一)-PCC Vivace | lily's page</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">lily's page</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/12/08/20211208%E6%8B%A5%E5%A1%9E%E6%8E%A7%E5%88%B6%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB%E7%AC%94%E8%AE%B0(%E4%B8%80)-PCC%20Vivace/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="lilyhpeng">
+      <meta itemprop="description" content="hahaha">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="lily's page">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          拥塞控制论文阅读笔记(一)-PCC Vivace
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-12-08 00:00:00" itemprop="dateCreated datePublished" datetime="2021-12-08T00:00:00+08:00">2021-12-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-12-07 17:17:36" itemprop="dateModified" datetime="2021-12-07T17:17:36+08:00">2021-12-07</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>​        拥塞控制（Congestion Control，CC）算法是网络传输中一个非常重要的模块，它的主要目的是通过控制网络发包的速率，避免因短时间向网络中注入大量数据包，超过网络本身可传输的数据量导致网络传输队列拥塞，从而造成延时增大及丢包等问题。</p>
+<span id="more"></span>
+
+<p>按照应用场景（基于的传输协议）的不同主要可分为：</p>
+<p>（1）TCP中的拥塞控制算法：TCP协议本身就是具有可靠性的传输协议，协议设计本身就包含拥塞控制算法模块，目前大部分拥塞控制算法的设计与优化都是针对TCP协议设计的，例如Reno、Cubic、BBR等；</p>
+<p>（2）UDP中的拥塞控制算法：该类算法主要针对实时音视频传输场景设计，在实时音视频传输场景中，由于TCP三次握手等机制导致传输延时较大，通常使用UDP传输数据包，应用层通过RTSP/RTCP/RTP协议等来保证传输的质量，因此该类拥塞控制算法通常也是在应用层进行设计，通过调节音视频数据的编码码率（通常不再是调整拥塞窗口大小），从而避免拥塞，这类算法包括GCC[^1]、NADA[^2]、SCReAM[^3]等。</p>
+<table>
+<thead>
+<tr>
+<th align="center"></th>
+<th align="center">基于TCP的拥塞控制算法</th>
+<th align="center">基于UDP的拥塞控制算法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">传输协议</td>
+<td align="center">TCP</td>
+<td align="center">传输层为UDP，上层为RTP/RTCP协议</td>
+</tr>
+<tr>
+<td align="center">调整参数</td>
+<td align="center">拥塞窗口大小、发送速率</td>
+<td align="center">发送速率、音视频编码码率</td>
+</tr>
+<tr>
+<td align="center">调整粒度</td>
+<td align="center">通常是每ACK/MI调整一次</td>
+<td align="center">通常最小为每帧调整一次（30ms以上）</td>
+</tr>
+</tbody></table>
+<p>​        上面是对现有拥塞控制算法进行了一个简单的分类，下面是记录以下PCC Vivace[^4]论文的阅读笔记，该算法属于第一类针对TCP协议的拥塞控制算法，也是较早的基于学习类的算法。</p>
+<h2 id="1-基本概念"><a href="#1-基本概念" class="headerlink" title="1.基本概念"></a>1.基本概念</h2><p>首先明确一些基本概念：</p>
+<ul>
+<li><p>离线学习：传统的基于学习的方法通常是离线学习，也被称为batch-learning，在离线环境下通过批量样本数据对模型进行更新，然后将训练好的模型上线；</p>
+</li>
+<li><p>在线学习：在线学习实际上是指一种模型训练的方法，是基于流式的数据进行训练的。在线学习中每采集到一个样本，就需要根据目标函数进行训练，对模型参数进行调整，因此需要可以快速地求出目标函数地最优解，最好能有解析解；</p>
+</li>
+<li><p>在线凸优化：简单理解就是如果在线学习中的目标函数是凸函数，就可以通过求梯度等方式来更新方向。</p>
+</li>
+</ul>
+<h2 id="2-摘要"><a href="#2-摘要" class="headerlink" title="2.摘要"></a>2.摘要</h2><p>​        PCC Allegro算法提供了以在线学习的方式进行码率控制的整体框架：在线上根据当前发送速率发送数据，采集相应统计指标作为当前发送速率的反馈，根据反馈来训练模型，形成闭环。具体来讲：时间轴被划分为多个MI（Monitor Interval，监测间隔），划分MI的作用是将时间轴划分为较小的单位，在每个单位内通过统计发送端可以观测到的网络相关指标，并将这些统计指标作为效用函数的输入，对其性能进行量化表示。码率控制模块沿着使得效用函数最优的方向来调整码率。</p>
+<p>​        PCC Allegro算法存在的两个问题：（1）效用函数的设计较为主观，尽管实验证明其有一定效果，但是它并没有经过严谨的理论证明，其中权重参数的设置较为困难；（2）采用固定的step size（更新幅度），在某些情况下可能会导致收敛速度过慢，或者导致更新幅度过大错过最优值。因此PCC Vivace主要针对上述两个问题，使用在线凸优化的解决思路，去优化原算法中效用函数及更新幅度问题。</p>
+<h2 id="3-效用函数"><a href="#3-效用函数" class="headerlink" title="3.效用函数"></a>3.效用函数</h2><h3 id="（1）效用函数定义"><a href="#（1）效用函数定义" class="headerlink" title="（1）效用函数定义"></a>（1）效用函数定义</h3><p>​        相比于PCC Allegro算法，PCC Vivace主要是对在线学习模型中的效用函数模型进行了优化，其公式如下：<br>$$<br>utility = x^t_i-bx_i\frac{d(RTT_i)}{dT}-cx_iL_i<br>$$<br>其中$x_i$表示发送者i地发送速率，$L_i$表示的是它观察到的丢包率，$\frac{d(RTT_i)}{dT}$表示RTT的梯度，即该MI内的RTT的变化量，b,c,t则为常量，0&lt;t&lt;1。这里为什么在效用函数中用到的是梯度而不是直接使用延时，论文中给出了一个例子：假设发送端在第一个MI以两倍于带宽的发送速率进行发送，然后在第二个MI内以稍低（但仍高于带宽）的速率进行发送，那么可以观察到在第二个MI内的延时会比第一个MI内观测到的绝对延时更大，因为网络队列更深了。然而，为了在单个MI内可以做出降低发送速率的决策，根据延时变化情况相比于绝对延时，可以更明显。</p>
+<h3 id="（2）效用函数性能的理论推导"><a href="#（2）效用函数性能的理论推导" class="headerlink" title="（2）效用函数性能的理论推导"></a>（2）效用函数性能的理论推导</h3><p>接下来对该效用函数的性能进行理论证明，并推导一些参数该如何设置：</p>
+<h4 id="a-稳定性和公平性"><a href="#a-稳定性和公平性" class="headerlink" title="a.稳定性和公平性"></a>a.稳定性和公平性</h4><p>略</p>
+<h4 id="b-随机丢包和拥塞丢包"><a href="#b-随机丢包和拥塞丢包" class="headerlink" title="b.随机丢包和拥塞丢包"></a>b.随机丢包和拥塞丢包</h4><p>略</p>
+<h4 id="c-异构的发送端"><a href="#c-异构的发送端" class="headerlink" title="c.异构的发送端"></a>c.异构的发送端</h4><p>略</p>
+<h3 id="（3）优化不可靠的统计信息（4-3）"><a href="#（3）优化不可靠的统计信息（4-3）" class="headerlink" title="（3）优化不可靠的统计信息（4.3）"></a>（3）优化不可靠的统计信息（4.3）</h3><p>​        算法通过发送端的统计信息来计算效用函数，作为对当前发送速率的评估。较长时间的统计信息可以更准确地描述，但同时也降低了对网络变化的适应性。PCC Vivace通过一个MI（后续实验中一个MI设置为一个RTT）内的统计信息作为效用函数的输入，但这些统计信息本身不一定是可靠的，需要对其进行一定的处理：</p>
+<ul>
+<li><p><strong>通过线性回归求解延时梯度</strong>：效用函数中需要计算$MI_x$内的延时梯度$\frac{d(RTT_x)}{dt}$，计算方式可以通过该MI内第一个和最后一个发送的包的RTT的差值进行计算，但更准确的计算方式可以采用线性回归：对该MI内发送的所有包，通过二维数据{RTT, sample_time}表征，然后通过线性回归求解这些数据在坐标系中的斜率作为延时梯度；</p>
+</li>
+<li><p><strong>对延时梯度进行低通滤波</strong>：由于物理层的丢包重传等会出现非拥塞导致的延时抖动，因此将小于$flt_latency$的延时梯度置为0，避免小抖动带来的影响；</p>
+</li>
+<li><p><strong>异常测量的双重确认</strong>：可能会存在一些违反直觉的统计特性（例如提高发送速率反而使得丢包率降低），需要通过重复检查去排除由于检测噪声或环境变化带来的异常统计结果，使用相同的发送速率，如果得到相同的统计结果则使用两次测量的延时梯度的平均值，若不同则舍弃掉之前的异常结果；</p>
+</li>
+<li><p><strong>MI超时</strong>：通常情况下一个MI内发送的所有包会经过一个RTT后返回，但出现网络突变可能会导致丢包或很大的延时，这些包在发送端需要经过很长时间才能知道它们的接收情况，因此设置阈值（通常为多个RTT），当超过该时间阈值都还没有确认这些包是否被接收，就认为此时网络状况变差，将发送速率减半。</p>
+</li>
+</ul>
+<h3 id="（4）TCP友好型（4-4）"><a href="#（4）TCP友好型（4-4）" class="headerlink" title="（4）TCP友好型（4.4）"></a>（4）TCP友好型（4.4）</h3><p>​        论文中进一步讨论了该算法对其他拥塞控制算法的友好性，即是否能够在与其他拥塞控制算法竞争瓶颈带宽时有较好的公平性。现有拥塞控制算法主要分为：1）基于丢包的拥塞控制算法：以丢包作为网络拥塞的信号，因此通常在网络队列填满之后再降低发送速率，导致队列长度过长引起延时过大；2）基于延时的拥塞控制算法：以延时变大作为网络拥塞信号，对延时敏感，但是在与基于丢包的拥塞控制算法竞争时被占据过多带宽。</p>
+<p>​        PCC Vivace由于在效用函数中同时考虑了发送速率、延时梯度和丢包，因此在不同场景下均可以达到较好的公平性，举例说明：<strong>1）</strong>当只有一个PCC Vivace发送端时，当以两个超过网络带宽的发送速率来进行探测时，此时网络队列未被填满，此时两种速率在实际吞吐量和丢包率上是相同的，但高发送速率会导致网络队列塞得更满，导致端到端延时更大，因此较低发送速率可以得到更高的utility，此时PCC Vivace就类似于一个延时敏感的算法；<strong>2）</strong>当PCC Vivace与其他协议（如CUBIC等）竞争带宽时，基于丢包的协议会将网络队列填满，此时PCC Vivace在以高低两种发送速率探测时，会发现两者的延时梯度几乎都为0（因为队列不会再增长导致端到端延时继续增大了），此时PCC Vivace类似于基于丢包的协议，与其他协议竞争带宽，而不会类似于基于延时的协议被挤占带宽，导致发送速率不断降低。</p>
+<h2 id="4-码率控制"><a href="#4-码率控制" class="headerlink" title="4.码率控制"></a>4.码率控制</h2><p>​        PCC Vivace的整个码率控制存在两个阶段：</p>
+<ul>
+<li><p><strong>慢启动阶段</strong>：在连接刚建立时进入慢启动阶段，发送端每个MI将发送速率进行翻倍，直到发送速率导致的效用值降低时退出慢启动阶段；</p>
+</li>
+<li><p><strong>在线学习阶段</strong>：退出慢启动之后的所有时间内均为在线学习阶段，该阶段内通过<strong>在线梯度下降</strong>学习算法来进行码率决策，步骤如下：</p>
+</li>
+</ul>
+<h4 id="（1）计算当前发送速率下的效用函数梯度"><a href="#（1）计算当前发送速率下的效用函数梯度" class="headerlink" title="（1）计算当前发送速率下的效用函数梯度"></a>（1）计算当前发送速率下的效用函数梯度</h4><p>​        若当前发送速率为r，接下来两个MI内，分别以$r(1+\varepsilon)$和$r(1-\varepsilon)$的发送速率发送数据，计算相应的效用$u_1$和$u_2$，并计算相应的梯度为$\gamma=\frac{u_1-u_2}{2\varepsilon r}$</p>
+<h4 id="（2）根据梯度计算发送速率的更新幅度"><a href="#（2）根据梯度计算发送速率的更新幅度" class="headerlink" title="（2）根据梯度计算发送速率的更新幅度"></a>（2）根据梯度计算发送速率的更新幅度</h4><p>​        定义新发送速率与当前发送速率的差值（即更新幅度）为$\Delta_r$，即$r_{new}=r+\Delta_r$，并引入一个变化系数“conversion factor”用$\theta$表示：初始时设置$\theta$为一个较保守的值$\theta_0$，此时更新幅度为$\Delta_r=\theta_0 \gamma$；随着对当前发送速率变化方向的自信度增加（多次决策的方向均相同），可以逐渐增大变化系数$\theta$的值，此时引入变量“confidence amplifier”描述对当前变化方向的自信程度，用$m(\tau)$表示，是关于$\tau$（表示的是连续做出增加或减小发送速率的次数）的单调非递减函数，且m(0)=1当发送端连续$\tau$次决策发送速率向同一方向变化时，此时更新幅度为$\Delta_r=m(\tau)\theta_0 \gamma$，当某个时刻发送速率变化方向改变，则将$\tau$重新置为0。</p>
+<p>​        <font color="red">总结一下上面两步的思路：在当前速率的基础上分别增大和减小速率，根据相应效应函数的大小判断发送速率的更新方向：当增大速率带来更高的效用则往增大发送速率的方向更新，反之则往减小发送速率的方向更新，此后，再根据决策的连续性增大更新幅度</font></p>
+<h4 id="（3）对发送速率的更新幅度进行限制"><a href="#（3）对发送速率的更新幅度进行限制" class="headerlink" title="（3）对发送速率的更新幅度进行限制"></a>（3）对发送速率的更新幅度进行限制</h4><p>​        由于上一步计算效用函数梯度是通过两个MI采样得到的，但是采样期间并不能保证网络带宽等条件保持不变，因此可能由于采样期间网络突变导致计算得到的梯度值很大，进一步导致更新幅度过大，更新后的发送速率超过网络带宽。</p>
+<p>​        为了解决这个问题引入了动态变化阈值（dynamic change boundary），用$\omega$表示，当更新幅度$\Delta_r$超过$\omega r$时会被裁剪。该阈值会动态调整：初始值为$\omega_0$（后续实验中设置为0.05），此后当$\Delta_r&lt;\omega$时就会逐渐下降，当$\Delta_r&gt;\omega$时会逐渐增大。具体来讲，当经过连续k次速率调整后，更新幅度$\Delta_r$超过阈值，$\omega$被更新为$\omega=\omega_0+k\cdot\delta$（其中$\delta$是一个预先定义的大于0的常量，后续实验中设置为0.1）。无论何时一旦$\Delta_r&lt;=r\cdot\omega$，就重新校准k，使其$\Delta_r&lt;=r\cdot\omega$为满足$\Delta_r&lt;=r\cdot\omega&lt;=r\cdot(\omega_0+k\cdot\delta)$的最小k值，当码率调整方向改变时，k重置为0，此时$\omega$也从$\omega_0$重新开始变化。</p>
+<h2 id="5-实验结果"><a href="#5-实验结果" class="headerlink" title="5.实验结果"></a>5.实验结果</h2><p>[^1]: GCC: <a target="_blank" rel="noopener" href="https://tools.ietf.org/html/draft-alvestrand-rtcweb-congestion-03">https://tools.ietf.org/html/draft-alvestrand-rtcweb-congestion-03</a><br>[^2]: Zhu, Xiaoqing, and Rong Pan. “NADA: A unified congestion control scheme for low-latency interactive video.” <em>2013 20th International Packet Video Workshop</em>. IEEE, 2013.<br>[^3]: Johansson, Ingemar. “Self-clocked rate adaptation for conversational video in LTE.” <em>Proceedings of the 2014 ACM SIGCOMM workshop on Capacity sharing workshop</em>. 2014.<br>[^4]:PCC Vivace: Online-learning Congestion Control</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%8B%A5%E5%A1%9E%E6%8E%A7%E5%88%B6/" rel="tag"># 拥塞控制</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/12/08/20211208%E5%AE%9E%E6%97%B6%E8%AF%AD%E9%9F%B3%E4%BC%A0%E8%BE%93%E7%B3%BB%E7%BB%9F(%E4%B8%80)-%E4%B8%BB%E6%B5%81%E9%9F%B3%E9%A2%91%E7%BC%96%E7%A0%81%E5%99%A8%E5%8F%8AOPUS%E7%BC%96%E7%A0%81%E5%99%A8/" rel="prev" title="实时语音传输系统(一)-主流音频编码器及OPUS编码器浅析">
+      <i class="fa fa-chevron-left"></i> 实时语音传输系统(一)-主流音频编码器及OPUS编码器浅析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/12/08/20211208Hexo%E5%88%A9%E7%94%A8GitHub%E6%90%AD%E5%BB%BA%E5%9B%BE%E5%BA%8A/" rel="next" title="Hexo利用Github搭建图床">
+      Hexo利用Github搭建图床 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="nav-number">1.</span> <span class="nav-text">1.基本概念</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%91%98%E8%A6%81"><span class="nav-number">2.</span> <span class="nav-text">2.摘要</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%95%88%E7%94%A8%E5%87%BD%E6%95%B0"><span class="nav-number">3.</span> <span class="nav-text">3.效用函数</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%EF%BC%881%EF%BC%89%E6%95%88%E7%94%A8%E5%87%BD%E6%95%B0%E5%AE%9A%E4%B9%89"><span class="nav-number">3.1.</span> <span class="nav-text">（1）效用函数定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%EF%BC%882%EF%BC%89%E6%95%88%E7%94%A8%E5%87%BD%E6%95%B0%E6%80%A7%E8%83%BD%E7%9A%84%E7%90%86%E8%AE%BA%E6%8E%A8%E5%AF%BC"><span class="nav-number">3.2.</span> <span class="nav-text">（2）效用函数性能的理论推导</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#a-%E7%A8%B3%E5%AE%9A%E6%80%A7%E5%92%8C%E5%85%AC%E5%B9%B3%E6%80%A7"><span class="nav-number">3.2.1.</span> <span class="nav-text">a.稳定性和公平性</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#b-%E9%9A%8F%E6%9C%BA%E4%B8%A2%E5%8C%85%E5%92%8C%E6%8B%A5%E5%A1%9E%E4%B8%A2%E5%8C%85"><span class="nav-number">3.2.2.</span> <span class="nav-text">b.随机丢包和拥塞丢包</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#c-%E5%BC%82%E6%9E%84%E7%9A%84%E5%8F%91%E9%80%81%E7%AB%AF"><span class="nav-number">3.2.3.</span> <span class="nav-text">c.异构的发送端</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%EF%BC%883%EF%BC%89%E4%BC%98%E5%8C%96%E4%B8%8D%E5%8F%AF%E9%9D%A0%E7%9A%84%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%EF%BC%884-3%EF%BC%89"><span class="nav-number">3.3.</span> <span class="nav-text">（3）优化不可靠的统计信息（4.3）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%EF%BC%884%EF%BC%89TCP%E5%8F%8B%E5%A5%BD%E5%9E%8B%EF%BC%884-4%EF%BC%89"><span class="nav-number">3.4.</span> <span class="nav-text">（4）TCP友好型（4.4）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%A0%81%E7%8E%87%E6%8E%A7%E5%88%B6"><span class="nav-number">4.</span> <span class="nav-text">4.码率控制</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%EF%BC%881%EF%BC%89%E8%AE%A1%E7%AE%97%E5%BD%93%E5%89%8D%E5%8F%91%E9%80%81%E9%80%9F%E7%8E%87%E4%B8%8B%E7%9A%84%E6%95%88%E7%94%A8%E5%87%BD%E6%95%B0%E6%A2%AF%E5%BA%A6"><span class="nav-number">4.0.1.</span> <span class="nav-text">（1）计算当前发送速率下的效用函数梯度</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%EF%BC%882%EF%BC%89%E6%A0%B9%E6%8D%AE%E6%A2%AF%E5%BA%A6%E8%AE%A1%E7%AE%97%E5%8F%91%E9%80%81%E9%80%9F%E7%8E%87%E7%9A%84%E6%9B%B4%E6%96%B0%E5%B9%85%E5%BA%A6"><span class="nav-number">4.0.2.</span> <span class="nav-text">（2）根据梯度计算发送速率的更新幅度</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%EF%BC%883%EF%BC%89%E5%AF%B9%E5%8F%91%E9%80%81%E9%80%9F%E7%8E%87%E7%9A%84%E6%9B%B4%E6%96%B0%E5%B9%85%E5%BA%A6%E8%BF%9B%E8%A1%8C%E9%99%90%E5%88%B6"><span class="nav-number">4.0.3.</span> <span class="nav-text">（3）对发送速率的更新幅度进行限制</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%AE%9E%E9%AA%8C%E7%BB%93%E6%9E%9C"><span class="nav-number">5.</span> <span class="nav-text">5.实验结果</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">lilyhpeng</p>
+  <div class="site-description" itemprop="description">hahaha</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">标签</span>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">lilyhpeng</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
